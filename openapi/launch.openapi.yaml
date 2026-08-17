@@ -1,0 +1,397 @@
+openapi: 3.0.3
+info:
+  title: MDK site launcher (Railway)
+  version: "0.1.0"
+  x-provenance: mixed
+  description: >-
+    Pseudo API for launching one MDK 0.6 site from an HTTP payload. This is the
+    launcher contract (`launch.mdk.tether.io/v1alpha1`), not the MDK Gateway
+    plugin API and not the 0.7 quickstart `/bootstrap` example.
+
+
+    Local first: `POST /v1/sites` spawns one MDK 0.6 child (`node start.js`)
+    on loopback. Railway is not required to prove a site. Wallet
+    proof-of-possession (`/v1/auth/*`) returns 501 until Stage 2.
+
+
+    Launch curl (no session yet):
+
+
+    ```
+    curl -sS -X POST "$HOST/v1/sites" \
+      -H "content-type: application/json" \
+      -H "Idempotency-Key: demo-1" \
+      -d '{"apiVersion":"launch.mdk.tether.io/v1alpha1","kind":"SiteLaunch","metadata":{"name":"hobby-demo"},"spec":{"template":{"name":"minimal-site","version":"0.6.0"},"persistence":"ephemeral"}}'
+    ```
+  contact:
+    name: launcher maintainers
+    url: https://github.com/Rockin-in-a-free-world/http-mdk-launch
+  license:
+    name: Apache-2.0
+    url: https://github.com/Rockin-in-a-free-world/http-mdk-launch/blob/0.6-railway/LICENSE
+servers:
+  - url: /
+    description: This Railway (or local) deployment
+tags:
+  - name: byot-auth
+    description: Launcher-owned wallet challenge (Stage 2). Not an MDK Gateway capability.
+  - name: mdk-core
+    description: Selects the public MDK 0.6.0 minimal-site template (Kernel, Gateway, one Worker).
+  - name: launcher
+    description: Liveness, version, and dry-run lifecycle owned by this HTTP service.
+x-tagGroups:
+  - name: MDK 0.6 core (template selection)
+    tags: [ mdk-core ]
+  - name: BYOT (launcher HTTP)
+    tags: [ byot-auth, launcher ]
+paths:
+  /health:
+    get:
+      operationId: health
+      tags: [ launcher ]
+      summary: Launcher liveness
+      description: Railway healthcheck. Returns 200 before any site is launched.
+      responses:
+        "200":
+          description: Process can accept requests
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ status ]
+                properties:
+                  status:
+                    type: string
+                    example: ok
+  /ready:
+    get:
+      operationId: ready
+      tags: [ launcher ]
+      summary: MDK site readiness
+      description: Not the Railway healthcheck. 200 only when the supervised MDK child and GET /overview succeed.
+      responses:
+        "200":
+          description: Site Gateway is live
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ ready, siteId ]
+                properties:
+                  ready:
+                    type: boolean
+                    example: true
+                  siteId:
+                    type: string
+        "503":
+          description: No live MDK site
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ ready, reason ]
+                properties:
+                  ready:
+                    type: boolean
+                    example: false
+                  reason:
+                    type: string
+                    example: no-site
+  /version:
+    get:
+      operationId: version
+      tags: [ launcher ]
+      summary: Build and runtime identity
+      responses:
+        "200":
+          description: Version fields
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VersionInfo"
+  /v1/auth/challenges:
+    post:
+      operationId: createChallenge
+      tags: [ byot-auth ]
+      summary: Issue a wallet challenge (Stage 2)
+      description: >-
+        Stage 1 returns 501. Later: POST `{ "publicKey": "<base58>" }` and sign
+        the returned message with WDK account index 0.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [ publicKey ]
+              properties:
+                publicKey:
+                  type: string
+            examples:
+              challenge:
+                value:
+                  publicKey: "11111111111111111111111111111111"
+      responses:
+        "501":
+          description: Not implemented on Stage 1
+  /v1/session:
+    post:
+      operationId: createSession
+      tags: [ byot-auth ]
+      summary: Exchange a challenge signature for a session (Stage 2)
+      description: Stage 1 returns 501.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [ challengeId, publicKey, signature ]
+              properties:
+                challengeId:
+                  type: string
+                publicKey:
+                  type: string
+                signature:
+                  type: string
+      responses:
+        "501":
+          description: Not implemented on Stage 1
+  /v1/sites/validate:
+    post:
+      operationId: validateSite
+      tags: [ mdk-core ]
+      summary: Validate a SiteLaunch document without launching
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SiteLaunch"
+            examples:
+              minimal:
+                $ref: "#/components/examples/HobbyDemo"
+      x-codeSamples:
+        - lang: curl
+          label: validate
+          source: |
+            curl -sS -X POST "$HOST/v1/sites/validate" \
+              -H "content-type: application/json" \
+              -d '{"apiVersion":"launch.mdk.tether.io/v1alpha1","kind":"SiteLaunch","metadata":{"name":"hobby-demo"},"spec":{"template":{"name":"minimal-site","version":"0.6.0"},"persistence":"ephemeral"}}'
+      responses:
+        "200":
+          description: Spec is valid and normalized
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ valid, spec ]
+                properties:
+                  valid:
+                    type: boolean
+                  spec:
+                    $ref: "#/components/schemas/SiteLaunch"
+        "400":
+          description: Invalid or unsupported spec
+        "415":
+          description: Content-Type is not application/json
+  /v1/sites:
+    post:
+      operationId: createSite
+      tags: [ mdk-core ]
+      summary: Launch the minimal-site template
+      description: >-
+        Returns 202 with state accepted, then boots Kernel, demo-worker, and
+        Gateway on loopback. Poll GET /v1/sites/{id} until live. One site at a time.
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: false
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SiteLaunch"
+            examples:
+              minimal:
+                $ref: "#/components/examples/HobbyDemo"
+      x-codeSamples:
+        - lang: curl
+          label: launch site
+          source: |
+            curl -sS -X POST "$HOST/v1/sites" \
+              -H "content-type: application/json" \
+              -H "Idempotency-Key: demo-1" \
+              -d '{"apiVersion":"launch.mdk.tether.io/v1alpha1","kind":"SiteLaunch","metadata":{"name":"hobby-demo"},"spec":{"template":{"name":"minimal-site","version":"0.6.0"},"persistence":"ephemeral"}}'
+      responses:
+        "202":
+          description: Accepted; site is booting
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SiteRecord"
+        "400":
+          description: Invalid or unsupported spec
+        "409":
+          description: A site is already booting or live
+        "503":
+          description: Local MDK v0.6.0 runtime tree is missing
+  /v1/sites/{id}:
+    get:
+      operationId: getSite
+      tags: [ launcher ]
+      summary: Site lifecycle record
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Known site record (in-memory, lost on restart)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SiteRecord"
+        "404":
+          description: Unknown site id
+  /v1/sites/{id}/gateway/overview:
+    get:
+      operationId: siteGatewayOverview
+      tags: [ mdk-core ]
+      summary: Allowlisted proxy to Gateway GET /overview
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Device list from the live Gateway
+        "409":
+          description: Site is not live
+        "404":
+          description: Unknown site id
+components:
+  examples:
+    HobbyDemo:
+      summary: Only accepted template on 0.6-railway
+      value:
+        apiVersion: launch.mdk.tether.io/v1alpha1
+        kind: SiteLaunch
+        metadata:
+          name: hobby-demo
+        spec:
+          template:
+            name: minimal-site
+            version: "0.6.0"
+          persistence: ephemeral
+  schemas:
+    VersionInfo:
+      type: object
+      additionalProperties: false
+      required:
+        - LAUNCHER_VERSION
+        - GIT_BRANCH
+        - BUILD_SHA
+        - MDK_RUNTIME_VERSION
+        - MDK_RUNTIME_PIN
+        - MDK_RUNTIME_REF
+        - MDK_RUNTIME_URL
+        - MDK_RUNTIME_TREE
+        - RUNTIME_SOURCE
+      properties:
+        LAUNCHER_VERSION:
+          type: string
+          example: "0.1.0"
+        GIT_BRANCH:
+          type: string
+          example: 0.6-railway
+        BUILD_SHA:
+          type: string
+        MDK_RUNTIME_VERSION:
+          type: string
+          example: "0.6.0"
+        MDK_RUNTIME_PIN:
+          type: string
+          enum: [ tag ]
+          example: tag
+        MDK_RUNTIME_REF:
+          type: string
+          example: v0.6.0
+        MDK_RUNTIME_URL:
+          type: string
+          format: uri
+          example: https://github.com/tetherto/mdk/releases/tag/v0.6.0
+        MDK_RUNTIME_TREE:
+          type: string
+          format: uri
+          example: https://github.com/tetherto/mdk/tree/v0.6.0
+        RUNTIME_SOURCE:
+          type: string
+          example: public-release
+    SiteLaunch:
+      type: object
+      additionalProperties: false
+      required: [ apiVersion, kind, metadata, spec ]
+      properties:
+        apiVersion:
+          type: string
+          enum: [ launch.mdk.tether.io/v1alpha1 ]
+        kind:
+          type: string
+          enum: [ SiteLaunch ]
+        metadata:
+          type: object
+          additionalProperties: false
+          required: [ name ]
+          properties:
+            name:
+              type: string
+              minLength: 1
+              maxLength: 63
+              pattern: "^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$"
+              example: hobby-demo
+        spec:
+          type: object
+          additionalProperties: false
+          required: [ template, persistence ]
+          properties:
+            template:
+              type: object
+              additionalProperties: false
+              required: [ name, version ]
+              properties:
+                name:
+                  type: string
+                  enum: [ minimal-site ]
+                version:
+                  type: string
+                  enum: [ "0.6.0" ]
+            persistence:
+              type: string
+              enum: [ required, ephemeral ]
+    SiteRecord:
+      type: object
+      additionalProperties: false
+      required: [ siteId, dryRun, state, spec, createdAt ]
+      properties:
+        siteId:
+          type: string
+        dryRun:
+          type: boolean
+        state:
+          type: string
+          enum: [ accepted, booting, live, failed, stopping, stopped ]
+        spec:
+          $ref: "#/components/schemas/SiteLaunch"
+        createdAt:
+          type: string
+          format: date-time

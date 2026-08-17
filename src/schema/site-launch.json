@@ -1,0 +1,55 @@
+{
+  "$id": "https://launch.mdk.tether.io/v1alpha1/SiteLaunch.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["apiVersion", "kind", "metadata", "spec"],
+  "properties": {
+    "apiVersion": {
+      "type": "string",
+      "const": "launch.mdk.tether.io/v1alpha1"
+    },
+    "kind": {
+      "type": "string",
+      "const": "SiteLaunch"
+    },
+    "metadata": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 63,
+          "pattern": "^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$"
+        }
+      }
+    },
+    "spec": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["template", "persistence"],
+      "properties": {
+        "template": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["name", "version"],
+          "properties": {
+            "name": {
+              "type": "string",
+              "const": "minimal-site"
+            },
+            "version": {
+              "type": "string",
+              "const": "0.6.0"
+            }
+          }
+        },
+        "persistence": {
+          "type": "string",
+          "enum": ["required", "ephemeral"]
+        }
+      }
+    }
+  }
+}

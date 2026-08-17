@@ -1,0 +1,14 @@
+{
+  "name": "@tetherto/mdk-plugin-minimal-site",
+  "version": "0.6.0",
+  "description": "Launcher-owned 0.6 minimal-site plugin: one read-only overview route.",
+  "routes": [
+    {
+      "id": "dashboard.overview",
+      "handler": "./controllers/overview.js",
+      "http": { "method": "GET", "path": "/overview" },
+      "description": "Live snapshot of every device across every registered Worker.",
+      "safety": "read-only"
+    }
+  ]
+}

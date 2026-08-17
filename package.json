@@ -1,0 +1,21 @@
+{
+  "name": "http-mdk-launch",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Authenticated HTTP launcher for one MDK 0.6 site on Railway",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "start": "node src/server.js",
+    "build:docs": "mkdir -p dist/docs && redocly build-docs openapi/launch.openapi.yaml -o dist/docs/index.html --theme.openapi.schemaDefinitionsTagName=Schemas --theme.openapi.theme.colors.primary.main='#f7931a' && cp openapi/launch.openapi.yaml dist/docs/openapi.yaml",
+    "test": "node --test test/*.test.js"
+  },
+  "dependencies": {
+    "ajv": "^8.17.1",
+    "ajv-formats": "^3.0.1"
+  },
+  "devDependencies": {
+    "@redocly/cli": "1.34.5"
+  }
+}
