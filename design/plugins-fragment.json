@@ -1,0 +1,108 @@
+{
+  "$comment": "DESIGN PROPOSAL ONLY -- not wired into openrpc/launch.openrpc.json. Shape matches that file's components.schemas style exactly, and composes with design/site-config-v2.openrpc-fragment.json's SiteLaunchSpecWorker/SiteLaunchSpecDeployment additions (see design/plugin-basic-auth.md and design/plugin-telemetry-store.md for the full write-ups). This is the shared piece: how a SiteLaunch document opts a site into the basic-auth and telemetry-store plugins, and how SiteReveal grows a telemetryStorage section.",
+
+  "components": {
+    "schemas": {
+      "$comment_opt_in_shape": "Two independent, additive opt-ins, matching the granularity of the two plugins: 'auth' inherently carries config (username/password) so its own presence on spec IS the opt-in -- no separate enum entry needed. 'telemetry-store' needs no per-site config (nothing to fill in beyond on/off), so it's a plain enum member of a general-purpose spec.plugins toggle array, left open for future config-free plugins.",
+
+      "SiteLaunchSpecAuth": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["username", "password"],
+        "properties": {
+          "username": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 63,
+            "description": "HTTP Basic Auth username for this site's protected Gateway routes."
+          },
+          "password": {
+            "type": "string",
+            "minLength": 8,
+            "description": "Plaintext password, submitted once over the same transport as the seed-phrase flow (this launcher assumes TLS terminates upstream, e.g. Railway's edge -- see src/session.js's x-forwarded-proto handling). The launcher hashes this immediately on receipt (scrypt, random per-site salt) and discards the plaintext: it is never stored in the SiteRecord, never included in sites.reveal or the downloadable spec.yaml, and never passed to the child process -- only the salt+hash are, via env vars. See design/plugin-basic-auth.md 'Password handling' for the full reasoning and design/plugins/basic-auth/lib/guard.js for the verifying side."
+          }
+        },
+        "description": "New, optional. Omitting this object entirely means the site has no basic-auth protection (today's behavior, unchanged) -- its presence is itself the opt-in, there is no separate 'enable basic-auth' flag to also set. Sibling of 'worker'/'deployment' from design/site-config-v2.openrpc-fragment.json inside SiteLaunch.spec."
+      },
+
+      "PluginName": {
+        "type": "string",
+        "enum": ["telemetry-store"],
+        "description": "Closed set of config-free plugins a site can opt into via spec.plugins. Only one member today (telemetry-store); basic-auth is deliberately NOT in this enum because it always needs config and is opted into via spec.auth's presence instead (see SiteLaunchSpecAuth). A future config-free plugin would be added here without touching spec.auth's shape."
+      },
+
+      "SiteLaunchSpecPlugins": {
+        "type": "array",
+        "items": { "$ref": "#/components/schemas/PluginName" },
+        "uniqueItems": true,
+        "default": [],
+        "description": "New, optional. Omit (or []) for today's behavior: no extra plugins, unchanged from what ships now. Listing 'telemetry-store' boots the site with design/plugins/telemetry-store registered via extraPluginDirs, appending every polled telemetry read to an on-disk CSV under this site's .mdk-data root (see design/plugin-telemetry-store.md)."
+      },
+
+      "SiteLaunch_v2_plus_plugins_spec_EXAMPLE": {
+        "$comment": "Illustrative only -- this is what components.schemas.SiteLaunch.properties.spec becomes once design/site-config-v2.openrpc-fragment.json's worker/deployment additions AND this fragment's auth/plugins additions are all merged in. Required stays ['template','persistence']: every new field here is additive and optional, matching the backward-compatibility rule design/site-config-v2.md section 4 already establishes for worker/deployment.",
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["template", "persistence"],
+        "properties": {
+          "template": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["name", "version"],
+            "properties": {
+              "name": { "type": "string", "enum": ["minimal-site"] },
+              "version": { "type": "string", "enum": ["0.6.0"] }
+            }
+          },
+          "persistence": { "type": "string", "enum": ["required", "ephemeral"] },
+          "worker": { "$comment": "From design/site-config-v2.openrpc-fragment.json's components.schemas.SiteLaunchSpecWorker -- shown here only to illustrate composition, not a resolvable cross-file $ref.", "$ref": "#/components/schemas/SiteLaunchSpecWorker_SEE_site-config-v2-fragment" },
+          "deployment": { "$comment": "From design/site-config-v2.openrpc-fragment.json's components.schemas.SiteLaunchSpecDeployment -- same note as 'worker' above.", "$ref": "#/components/schemas/SiteLaunchSpecDeployment_SEE_site-config-v2-fragment" },
+          "auth": { "$ref": "#/components/schemas/SiteLaunchSpecAuth" },
+          "plugins": { "$ref": "#/components/schemas/SiteLaunchSpecPlugins" }
+        }
+      },
+
+      "$comment_SiteReveal": "Additive to the EXISTING components.schemas.SiteReveal in openrpc/launch.openrpc.json (read there first -- required: ['siteId','slot','state','requestCurl','storage','telemetry'], additionalProperties: false): one new optional sibling property of 'storage'/'telemetry', populated only when 'telemetry-store' is in spec.plugins. Also tightens 'storage.path' /'requestCurl' handling: see the redaction note below.",
+
+      "TelemetryStorageMechanism": {
+        "type": "string",
+        "enum": ["csv"],
+        "description": "Which on-disk mechanism telemetry-store used. Only 'csv' today (design/plugin-telemetry-store.md's choice) -- kept as an enum, not a boolean, so a future 'sqlite' implementation is additive, not a breaking rename."
+      },
+
+      "TelemetryStorageGrowth": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["bytesPerHour", "bytesPerSample"],
+        "properties": {
+          "bytesPerHour": {
+            "type": ["number", "null"],
+            "description": "sizeBytes / hours elapsed between the first and most recent recorded sample. null until at least two distinct sample timestamps have been observed -- never a hardcoded guess, always derived from this site's own real appends (design/plugins/telemetry-store/lib/store.js's stats())."
+          },
+          "bytesPerSample": {
+            "type": ["number", "null"],
+            "description": "sizeBytes / rowCount. null until at least one row has been appended."
+          }
+        }
+      },
+
+      "SiteRevealTelemetryStorage": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["mechanism", "path", "sizeBytes", "rowCount", "firstObservedAt", "lastObservedAt", "growth"],
+        "properties": {
+          "mechanism": { "$ref": "#/components/schemas/TelemetryStorageMechanism" },
+          "path": { "type": "string", "description": "Absolute path to the CSV file on this site's .mdk-data root, e.g. <siteRoot>/.mdk-data/telemetry-store/telemetry.csv. Same disclosure posture as SiteReveal.storage.path/.corestore -- this is transparency about mechanics, not a secret." },
+          "sizeBytes": { "type": "integer", "minimum": 0, "description": "fs.statSync() of the live file at request time." },
+          "rowCount": { "type": "integer", "minimum": 0 },
+          "firstObservedAt": { "type": ["integer", "null"], "description": "Unix ms of the first sample ever recorded by this plugin instance (persisted in a sidecar file so it survives a Gateway restart within the site's lifetime -- see store.js)." },
+          "lastObservedAt": { "type": ["integer", "null"] },
+          "growth": { "$ref": "#/components/schemas/TelemetryStorageGrowth" }
+        },
+        "description": "New, optional sibling of SiteReveal.storage/telemetry. Present only when spec.plugins included 'telemetry-store' for this site; otherwise omitted entirely (not null) -- a site that never opted in has nothing to report here, which is a different statement from 'we tried to read it and it was unavailable' (contrast with design/site-config-v2.openrpc-fragment.json's telemetryUnavailableReason pattern for a headless-Gateway site, which IS an opt-in-shaped null)."
+      },
+
+      "$comment_redaction": "Not a new schema, a correctness note for whoever implements this: src/server.js's revealCurl() reproduces sites.create's exact request body from record.spec. If spec.auth is ever stored with a real password or even a hash+salt inside record.spec, revealCurl()'s JSON.stringify(rpcBody) would print it right back out through sites.reveal -- exactly the leak design/plugin-basic-auth.md's password-handling section says must not happen. The concrete fix: normalize record.spec.spec.auth.password to a fixed placeholder string (e.g. '<redacted>') before it is ever stored in the SiteRecord or reproduced in requestCurl/spec.yaml -- the real salt+hash live only in the env vars passed to the child process (see design/plugin-basic-auth.md), never in the record the launcher keeps around or reveals."
+    }
+  }
+}

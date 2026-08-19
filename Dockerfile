@@ -1,13 +1,3 @@
-FROM node:24-alpine AS builder
-
-WORKDIR /app
-
-COPY package.json package-lock.json ./
-RUN npm ci
-
-COPY openapi ./openapi
-RUN npm run build:docs
-
 FROM node:24-alpine AS runner
 
 WORKDIR /app
@@ -18,7 +8,8 @@ COPY package.json package-lock.json ./
 RUN npm ci --omit=dev
 
 COPY src ./src
-COPY --from=builder /app/dist ./dist
+COPY templates ./templates
+COPY openrpc ./openrpc
 
 EXPOSE 8080
 

@@ -179,9 +179,15 @@ a:hover {
   filter: none;
 }
 
-.mdk_tabs__trigger[data-state="active"] {
-  text-shadow: 0 0 0.25px currentcolor;
-  color: var(--mdk-color-primary);
+.mdk_tabs__trigger[data-state="disabled"] {
+  color: var(--mdk-color-text-tertiary);
+  opacity: 0.4;
+  pointer-events: none;
+  cursor: default;
+}
+
+.mdk_tabs--sites {
+  margin-bottom: 1rem;
 }
 
 .mdk_tabs__panel {
@@ -199,12 +205,28 @@ a:hover {
   background: var(--mdk-color-surface);
 }
 
+.mdk-ui-shell-page__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  min-height: 2.25rem;
+}
+
 .mdk-ui-shell-page__title {
   margin: 0;
   font-size: 1.25rem;
   font-weight: 600;
   line-height: 1.2;
   color: var(--mdk-color-text-primary);
+  flex: 0 0 auto;
+}
+
+.mdk-pin {
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-align: right;
+  word-break: break-all;
 }
 
 .mdk-path {
@@ -212,6 +234,7 @@ a:hover {
   flex-wrap: wrap;
   align-items: center;
   gap: 0.5rem 0.75rem;
+  margin: 1rem 0;
   padding: 0.75rem 1rem;
   border: 1px solid var(--mdk-color-border);
   border-radius: 8px;
@@ -347,6 +370,68 @@ a:hover {
   overflow-x: auto;
 }
 
+.mdk-input {
+  display: block;
+  width: 100%;
+  margin: 0 0 1rem;
+  padding: 0.75rem;
+  font: inherit;
+  color: var(--mdk-color-text-primary);
+  background: var(--mdk-color-surface);
+  border: 1px solid var(--mdk-color-border);
+  border-radius: 6px;
+  resize: vertical;
+}
+
+.mdk-card__lead {
+  color: var(--mdk-color-text-secondary);
+}
+
+.mdk-wallet {
+  margin-bottom: 1.25rem;
+}
+
+.mdk-auth-line {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+}
+
+.mdk-auth-line #auth-status {
+  flex: 1 1 auto;
+  min-width: 0;
+  word-break: break-all;
+}
+
+.mdk-info {
+  flex: 0 0 auto;
+  width: 1.15rem;
+  height: 1.15rem;
+  margin-top: 0.1rem;
+  padding: 0;
+  border: 1.5px solid var(--mdk-color-danger);
+  border-radius: 50%;
+  background: transparent;
+  color: var(--mdk-color-danger);
+  font: inherit;
+  font-size: 0.75rem;
+  font-style: italic;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.mdk-info[aria-expanded="true"] {
+  background: color-mix(in srgb, var(--mdk-color-danger) 18%, transparent);
+}
+
+.mdk-seed-warn {
+  margin: 0 0 0.75rem;
+  color: var(--mdk-color-danger);
+  font-size: 0.9rem;
+  line-height: 1.45;
+}
+
 .mdk-cta {
   display: inline-flex;
   align-items: center;
@@ -358,13 +443,28 @@ a:hover {
   font-weight: 600;
   color: #ffffff;
   background: #000000;
-  border: 1px solid #ff6a00;
+  border: none;
   border-radius: 0;
 }
 
 .mdk-cta:hover {
   color: #ff6a00;
   filter: none;
+}
+
+.mdk-cta:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.mdk-cta[aria-disabled="true"] {
+  opacity: 0.55;
+  pointer-events: none;
+  cursor: default;
+}
+
+.mdk-notes {
+  margin-bottom: 1.25rem;
 }
 
 @media (max-width: 768px) {

@@ -15,10 +15,15 @@ function dataRoot () {
   return process.env.LAUNCHER_DATA_DIR || path.join(LAUNCHER_ROOT, '.data')
 }
 
-function gatewayOrigin () {
+function gatewayOrigin (slot) {
+  const n = Number(slot) > 0 ? Number(slot) : 1
   const host = process.env.MDK_HTTP_HOST || '127.0.0.1'
-  const port = Number(process.env.MDK_HTTP_PORT) || 3000
-  return { host, port, url: `http://${host}:${port}` }
+  return {
+    host,
+    port: 2999 + n,
+    mockPort: 9100 + n,
+    url: `http://${host}:${2999 + n}`
+  }
 }
 
 function runtimeReady (root = mdkRoot()) {

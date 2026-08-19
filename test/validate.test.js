@@ -46,8 +46,87 @@ test('rejects unsupported templates by name', () => {
   assert.equal(result.code, 'ERR_UNSUPPORTED_TEMPLATE')
 })
 
+test('accepts an explicit slot and passes it through', () => {
+  const result = validateSiteLaunch({
+    ...valid,
+    metadata: { name: 'hobby-demo', slot: 2 }
+  })
+  assert.equal(result.ok, true)
+  assert.equal(result.spec.metadata.slot, 2)
+})
+
+test('rejects an out-of-range slot', () => {
+  const result = validateSiteLaunch({
+    ...valid,
+    metadata: { name: 'hobby-demo', slot: 4 }
+  })
+  assert.equal(result.ok, false)
+})
+
 test('rejects arrays as the body', () => {
   const result = validateSiteLaunch([])
   assert.equal(result.ok, false)
   assert.equal(result.code, 'ERR_INVALID_JSON')
+})
+
+test('accepts spec.auth and passes it through as plaintext (redaction is server.js\'s job, not validate-site.js\'s)', () => {
+  const result = validateSiteLaunch({
+    ...valid,
+    spec: { ...valid.spec, auth: { username: 'admin', password: 'password1234' } }
+  })
+  assert.equal(result.ok, true)
+  assert.deepEqual(result.spec.spec.auth, { username: 'admin', password: 'password1234' })
+})
+
+test('rejects a spec.auth.password shorter than 8 characters', () => {
+  const result = validateSiteLaunch({
+    ...valid,
+    spec: { ...valid.spec, auth: { username: 'admin', password: 'short' } }
+  })
+  assert.equal(result.ok, false)
+})
+
+test('rejects spec.auth missing username', () => {
+  const result = validateSiteLaunch({
+    ...valid,
+    spec: { ...valid.spec, auth: { password: 'password1234' } }
+  })
+  assert.equal(result.ok, false)
+})
+
+test('omits spec.auth when not provided', () => {
+  const result = validateSiteLaunch(valid)
+  assert.equal(result.ok, true)
+  assert.equal(result.spec.spec.auth, undefined)
+})
+
+test('accepts spec.plugins with telemetry-store and passes it through', () => {
+  const result = validateSiteLaunch({
+    ...valid,
+    spec: { ...valid.spec, plugins: ['telemetry-store'] }
+  })
+  assert.equal(result.ok, true)
+  assert.deepEqual(result.spec.spec.plugins, ['telemetry-store'])
+})
+
+test('rejects an unknown plugin name', () => {
+  const result = validateSiteLaunch({
+    ...valid,
+    spec: { ...valid.spec, plugins: ['not-a-real-plugin'] }
+  })
+  assert.equal(result.ok, false)
+})
+
+test('rejects duplicate plugin names', () => {
+  const result = validateSiteLaunch({
+    ...valid,
+    spec: { ...valid.spec, plugins: ['telemetry-store', 'telemetry-store'] }
+  })
+  assert.equal(result.ok, false)
+})
+
+test('omits spec.plugins when not provided', () => {
+  const result = validateSiteLaunch(valid)
+  assert.equal(result.ok, true)
+  assert.equal(result.spec.spec.plugins, undefined)
 })

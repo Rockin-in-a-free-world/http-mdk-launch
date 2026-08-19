@@ -18,6 +18,10 @@ const ROOT = process.env.MDK_SITE_ROOT || path.join(__dirname, '.mdk-data')
 const MOCK_PORT = Number(process.env.MDK_MOCK_PORT) || 9101
 const HTTP_PORT = Number(process.env.MDK_HTTP_PORT) || 3000
 const HTTP_HOST = process.env.MDK_HTTP_HOST || '127.0.0.1'
+const SLOT = Number(process.env.MDK_SLOT) || 1
+const WORKER_ID = `demo-worker-${SLOT}`
+const DEVICE_ID = `demo-${SLOT}`
+const DEVICE_SERIAL = `WM3-000${SLOT}`
 
 function fingerprint (key) {
   const buf = Buffer.isBuffer(key) ? key : Buffer.from(String(key), 'hex')
@@ -33,28 +37,38 @@ function onceListening (mock) {
 async function main () {
   fs.mkdirSync(ROOT, { recursive: true })
 
-  const mock = demoMock.createServer({ host: '127.0.0.1', port: MOCK_PORT, serial: 'WM3-0001' })
+  const mock = demoMock.createServer({ host: '127.0.0.1', port: MOCK_PORT, serial: DEVICE_SERIAL })
   await onceListening(mock)
 
   const kernel = await getKernel({
     root: ROOT,
-    keyFile: path.join(ROOT, '.kernel-key')
+    keyFile: path.join(ROOT, '.kernel-key'),
+    topicFile: path.join(ROOT, '.dht-topic'),
+    discovery: { mode: 'local', dir: path.join(ROOT, '.worker-keys') }
   })
   const worker = await startDemoWorker({
-    workerId: 'demo-worker-1',
+    workerId: WORKER_ID,
     storeDir: path.join(ROOT, 'demo-worker-store'),
-    seedDevices: [{ id: 'demo-0', opts: { host: '127.0.0.1', port: MOCK_PORT } }]
+    seedDevices: [{ id: DEVICE_ID, opts: { host: '127.0.0.1', port: MOCK_PORT } }]
   })
 
   await kernel.registerWorker(worker.runtime.getPublicKey())
   await waitForDiscovery(kernel, { minWorkers: 1 })
+
+  const extraPluginDirs = [path.join(__dirname, 'plugins', 'dashboard')]
+  if (process.env.MDK_BASIC_AUTH_USER) {
+    extraPluginDirs.push(path.join(__dirname, 'plugins', 'basic-auth'))
+  }
+  if (process.env.MDK_TELEMETRY_STORE_ENABLED === '1') {
+    extraPluginDirs.push(path.join(__dirname, 'plugins', 'telemetry-store'))
+  }
 
   await startGateway({
     kernel,
     port: HTTP_PORT,
     root: path.join(ROOT, 'gateway'),
     tmpdir: path.join(ROOT, 'gateway'),
-    extraPluginDirs: [path.join(__dirname, 'plugins', 'dashboard')],
+    extraPluginDirs,
     httpd: { h0: { host: HTTP_HOST } }
   })
 
@@ -63,7 +77,7 @@ async function main () {
   const identity = {
     gateway: { id: `${HTTP_HOST}:${HTTP_PORT}`, serving: true },
     kernel: kernelFp,
-    worker: { id: 'demo-worker-1', ...workerFp }
+    worker: { id: WORKER_ID, ...workerFp }
   }
   fs.writeFileSync(path.join(ROOT, 'launcher-identity.json'), JSON.stringify(identity, null, 2))
 

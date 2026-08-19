@@ -1,0 +1,53 @@
+{
+  "name": "@tetherto/mdk-plugin-telemetry-store",
+  "version": "0.1.0-design",
+  "description": "DESIGN PROTOTYPE (not wired into templates/minimal-site). Persists every polled telemetry read to an append-only CSV under the site's .mdk-data root, serves it back as time-ranged history for a dashboard graph, and reports real, currently-observed storage-transparency stats (mechanism, path, size, row count, growth rate) for the reveal panel. See design/plugin-telemetry-store.md for the CSV-vs-SQLite reasoning and the append-on-read design (Gateway plugins have no interval/boot hook -- see that doc's grounding).",
+  "routes": [
+    {
+      "id": "telemetryStore.poll",
+      "handler": "./controllers/poll.js",
+      "http": {
+        "method": "GET",
+        "path": "/telemetry-store/poll",
+        "responses": {
+          "200": { "description": "Freshly pulled telemetry for every device, one CSV row appended per field." }
+        }
+      },
+      "description": "Pulls live telemetry (the same devices/fields dashboard.overview reports) and appends one row per field to the CSV store. This route's write only happens when something calls it -- see plugin-telemetry-store.md's 'who calls poll' section for wiring options, since Gateway plugins have no timer/boot hook of their own to drive this on a schedule.",
+      "safety": "read-triggers-write"
+    },
+    {
+      "id": "telemetryStore.history",
+      "handler": "./controllers/history.js",
+      "http": {
+        "method": "GET",
+        "path": "/telemetry-store/history",
+        "parameters": [
+          { "in": "query", "name": "deviceId", "required": false, "schema": { "type": "string" } },
+          { "in": "query", "name": "field", "required": false, "schema": { "type": "string" } },
+          { "in": "query", "name": "limit", "required": false, "schema": { "type": "integer", "minimum": 1, "maximum": 2000 } },
+          { "in": "query", "name": "from", "required": false, "schema": { "type": "integer", "minimum": 0 } },
+          { "in": "query", "name": "to", "required": false, "schema": { "type": "integer", "minimum": 0 } }
+        ],
+        "responses": {
+          "200": { "description": "Oldest-to-newest samples, optionally filtered by device/field/time range, capped at 2000." }
+        }
+      },
+      "description": "Pure read: a time-ranged, optionally field-filtered slice of the CSV store, shaped for a dashboard <canvas>/line-chart consumer. No side effects.",
+      "safety": "read-only"
+    },
+    {
+      "id": "telemetryStore.stats",
+      "handler": "./controllers/stats.js",
+      "http": {
+        "method": "GET",
+        "path": "/telemetry-store/stats",
+        "responses": {
+          "200": { "description": "Storage-transparency snapshot: mechanism, file path, size in bytes, row count, and a growth-rate estimate derived from real observed samples." }
+        }
+      },
+      "description": "Pure read, no side effects. The response shape here is exactly what design/plugins-fragment.json proposes as SiteReveal.telemetryStorage -- a future sites.reveal implementation would probe this route the same way it already probes /overview for SiteReveal.telemetry.",
+      "safety": "read-only"
+    }
+  ]
+}

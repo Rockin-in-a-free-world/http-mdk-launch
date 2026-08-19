@@ -8,14 +8,13 @@
   },
   "scripts": {
     "start": "node src/server.js",
-    "build:docs": "mkdir -p dist/docs && redocly build-docs openapi/launch.openapi.yaml -o dist/docs/index.html --theme.openapi.schemaDefinitionsTagName=Schemas --theme.openapi.theme.colors.primary.main='#f7931a' && cp openapi/launch.openapi.yaml dist/docs/openapi.yaml",
-    "test": "node --test test/*.test.js"
+    "test": "node --test test/*.test.js",
+    "build:console": "npm install --prefix console && npm run build --prefix console"
   },
   "dependencies": {
+    "@scure/bip39": "^2.3.0",
+    "@tetherto/wdk-wallet-solana": "^1.0.0-beta.4",
     "ajv": "^8.17.1",
     "ajv-formats": "^3.0.1"
-  },
-  "devDependencies": {
-    "@redocly/cli": "1.34.5"
   }
 }

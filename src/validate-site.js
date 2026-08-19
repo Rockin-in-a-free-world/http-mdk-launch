@@ -70,13 +70,21 @@ function validateSiteLaunch (body) {
     spec: {
       apiVersion: body.apiVersion,
       kind: body.kind,
-      metadata: { name: body.metadata.name },
+      metadata: Number.isInteger(body.metadata.slot)
+        ? { name: body.metadata.name, slot: body.metadata.slot }
+        : { name: body.metadata.name },
       spec: {
         template: {
           name: body.spec.template.name,
           version: body.spec.template.version
         },
-        persistence: body.spec.persistence
+        persistence: body.spec.persistence,
+        ...(body.spec.auth
+          ? { auth: { username: body.spec.auth.username, password: body.spec.auth.password } }
+          : {}),
+        ...(Array.isArray(body.spec.plugins)
+          ? { plugins: body.spec.plugins.slice() }
+          : {})
       }
     }
   }
