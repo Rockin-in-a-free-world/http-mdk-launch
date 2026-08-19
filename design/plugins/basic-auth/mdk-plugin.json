@@ -1,0 +1,21 @@
+{
+  "name": "@tetherto/mdk-plugin-basic-auth",
+  "version": "0.1.0-design",
+  "description": "DESIGN PROTOTYPE (not wired into templates/minimal-site). HTTP Basic Auth gate for a site's Gateway routes, credentials sourced from SiteLaunch.spec.auth at sites.create time and never handed to this process as plaintext -- only a per-site salt+hash reach it, via env vars. See design/plugin-basic-auth.md for the full write-up, including why this can only protect routes that opt in by calling requireBasicAuth() themselves (no framework-level route wrapping/interception exists) and why failures surface as HTTP 400 rather than a real 401.",
+  "routes": [
+    {
+      "id": "basicAuth.overview",
+      "handler": "./controllers/protected-overview.js",
+      "http": {
+        "method": "GET",
+        "path": "/auth-overview",
+        "responses": {
+          "200": { "description": "Same payload as dashboard.overview (deviceId/workerId/workerState + spread telemetry), gated behind HTTP Basic Auth." },
+          "400": { "description": "Missing/malformed Authorization header, or the submitted username/password don't match the site's configured credential. See plugin-basic-auth.md for why this is 400 and not 401." }
+        }
+      },
+      "description": "Demonstrates the shared requireBasicAuth() guard by reproducing templates/minimal-site/plugins/dashboard/controllers/overview.js's exact body with one added line at the top. Ships as its own route (this design task doesn't edit the dashboard plugin) so it is runnable standalone today; wiring the guard onto the real dashboard.overview route later is the one-line change shown in this file's sibling controller.",
+      "safety": "read-only after auth"
+    }
+  ]
+}

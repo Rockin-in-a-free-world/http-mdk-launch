@@ -1,0 +1,217 @@
+{
+  "$comment": "DESIGN PROPOSAL ONLY — not wired into openrpc/launch.openrpc.json. Shape matches that file's methods[]/components.schemas style exactly so it can be merged in later. See design/site-config-v2.md for the full write-up and grounding.",
+
+  "methods": [
+    {
+      "name": "sites.configOptions",
+      "summary": "Discover available worker types and deployment modes for sites.create",
+      "description": "Read-only discovery method for the launch-config UI: returns the closed set of worker types and deployment modes SiteLaunch.spec.worker.type / SiteLaunch.spec.deployment.gateway accept, each with a label/description suitable for rendering as a dropdown, so the docs console (and any future site-design form) doesn't have to hardcode the enums. No session required — mirrors sites.validate in being safe to call before auth.",
+      "params": [],
+      "result": {
+        "name": "SiteConfigOptions",
+        "schema": { "$ref": "#/components/schemas/SiteConfigOptions" }
+      },
+      "examples": [
+        {
+          "name": "config-options",
+          "params": [],
+          "result": {
+            "name": "config-options-result",
+            "value": {
+              "workerTypes": [
+                {
+                  "value": "miner",
+                  "label": "ASIC miner (demo)",
+                  "description": "Mocked WM_V3 firmware: hashrate, power draw, board temperature, power-mode command.",
+                  "telemetryFields": [
+                    { "name": "hashrate_rt", "unit": "TH/s", "kind": "gauge" },
+                    { "name": "power", "unit": "W", "kind": "gauge" },
+                    { "name": "temperature", "unit": "C", "kind": "gauge" },
+                    { "name": "power_mode", "unit": null, "kind": "enum" }
+                  ],
+                  "commands": ["reboot", "setPowerMode"]
+                },
+                {
+                  "value": "temperature-sensor",
+                  "label": "Temperature sensor",
+                  "description": "Read-only ambient temperature sensor with SQLite-backed history (bounded random walk around 25C, +/-3C).",
+                  "telemetryFields": [
+                    { "name": "temperature", "unit": "C", "kind": "gauge" }
+                  ],
+                  "commands": []
+                },
+                {
+                  "value": "power-meter",
+                  "label": "Power meter (rack PDU)",
+                  "description": "Read-only single-phase electrical meter for one rack circuit: voltage, current, power, power factor, frequency, and a monotonically increasing cumulative energy counter.",
+                  "telemetryFields": [
+                    { "name": "voltage", "unit": "V", "kind": "gauge" },
+                    { "name": "current", "unit": "A", "kind": "gauge" },
+                    { "name": "power", "unit": "W", "kind": "gauge" },
+                    { "name": "power_factor", "unit": null, "kind": "gauge" },
+                    { "name": "frequency", "unit": "Hz", "kind": "gauge" },
+                    { "name": "energy_total", "unit": "kWh", "kind": "counter" }
+                  ],
+                  "commands": []
+                }
+              ],
+              "deploymentModes": [
+                {
+                  "value": "enabled",
+                  "label": "With Gateway (default)",
+                  "description": "Kernel + Worker + Gateway on loopback. sites.overview and sites.reveal telemetry work as today."
+                },
+                {
+                  "value": "disabled",
+                  "label": "Without Gateway (headless)",
+                  "description": "Kernel + Worker only, no HTTP surface for the site. sites.overview returns ERR_NO_GATEWAY; sites.reveal.telemetry is null (telemetryUnavailableReason: 'no-gateway'). Boot-readiness is detected from the child process's stdout 'mdk-ready' line instead of an HTTP probe."
+                }
+              ]
+            }
+          }
+        }
+      ]
+    }
+  ],
+
+  "components": {
+    "schemas": {
+      "WorkerType": {
+        "type": "string",
+        "enum": ["miner", "temperature-sensor", "power-meter"],
+        "default": "miner",
+        "description": "Which device family the site's single Worker mocks. Omit to get 'miner' (today's only worker), for backward compatibility with SiteLaunch documents written before this field existed."
+      },
+
+      "GatewayMode": {
+        "type": "string",
+        "enum": ["enabled", "disabled"],
+        "default": "enabled",
+        "description": "Whether the site boots a Gateway. 'enabled' (default) matches today's behavior exactly: Kernel + Worker + Gateway, with sites.overview/sites.reveal.telemetry backed by the Gateway's HTTP /overview. 'disabled' is a literal, MDK-core-supported headless topology (Kernel + Worker only, startGateway is simply never called) with real, documented consequences: no HTTP surface at all for the site, sites.overview returns ERR_NO_GATEWAY, sites.reveal.telemetry stays null, and boot-readiness is read from the child process's stdout 'mdk-ready' line rather than an HTTP probe. See design/site-config-v2.md section 3 for the full grounding (including why 'Gateway with zero plugins' is not achievable — the Gateway always mounts three built-in MDK plugins regardless of extraPluginDirs)."
+      },
+
+      "TelemetryFieldDescriptor": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "kind"],
+        "properties": {
+          "name": { "type": "string", "description": "MDK telemetry capability name, as it appears spread into the /overview device object." },
+          "unit": { "type": ["string", "null"], "description": "Physical unit, or null for unitless/enum fields." },
+          "kind": {
+            "type": "string",
+            "enum": ["gauge", "counter", "enum"],
+            "description": "gauge: instantaneous value that can move either direction. counter: monotonically increasing accumulator (e.g. cumulative energy). enum: a small closed set of string states."
+          }
+        }
+      },
+
+      "WorkerTypeOption": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["value", "label", "description", "telemetryFields", "commands"],
+        "properties": {
+          "value": { "$ref": "#/components/schemas/WorkerType" },
+          "label": { "type": "string" },
+          "description": { "type": "string" },
+          "telemetryFields": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/TelemetryFieldDescriptor" }
+          },
+          "commands": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Worker Plugin command names available for this worker type (empty for read-only worker types)."
+          }
+        }
+      },
+
+      "DeploymentModeOption": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["value", "label", "description"],
+        "properties": {
+          "value": { "$ref": "#/components/schemas/GatewayMode" },
+          "label": { "type": "string" },
+          "description": { "type": "string" }
+        }
+      },
+
+      "SiteConfigOptions": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["workerTypes", "deploymentModes"],
+        "properties": {
+          "workerTypes": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/WorkerTypeOption" }
+          },
+          "deploymentModes": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/DeploymentModeOption" }
+          }
+        }
+      },
+
+      "$comment_SiteLaunch": "The two blocks below are the concrete additions to the EXISTING components.schemas.SiteLaunch.properties.spec.properties in openrpc/launch.openrpc.json (and the mirrored src/schema/site-launch.json). Both are optional siblings of 'template' and 'persistence' — additionalProperties stays false on 'spec', so both keys must be added to its properties map, not appended elsewhere. Shown here as the two new property entries plus the full resulting 'spec' object for clarity.",
+
+      "SiteLaunchSpecWorker": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["type"],
+        "properties": {
+          "type": { "$ref": "#/components/schemas/WorkerType" }
+        },
+        "description": "New in v2. Omit the whole object to default to { type: 'miner' }."
+      },
+
+      "SiteLaunchSpecDeployment": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["gateway"],
+        "properties": {
+          "gateway": { "$ref": "#/components/schemas/GatewayMode" }
+        },
+        "description": "New in v2. Omit the whole object to default to { gateway: 'enabled' }."
+      },
+
+      "SiteLaunch_v2_spec_EXAMPLE": {
+        "$comment": "Illustrative only — this is what components.schemas.SiteLaunch.properties.spec becomes once the two new optional properties are merged in. Required stays ['template','persistence']: worker/deployment are additive and optional for backward compatibility (see design/site-config-v2.md section 4).",
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["template", "persistence"],
+        "properties": {
+          "template": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["name", "version"],
+            "properties": {
+              "name": { "type": "string", "enum": ["minimal-site"] },
+              "version": { "type": "string", "enum": ["0.6.0"] }
+            }
+          },
+          "persistence": { "type": "string", "enum": ["required", "ephemeral"] },
+          "worker": { "$ref": "#/components/schemas/SiteLaunchSpecWorker" },
+          "deployment": { "$ref": "#/components/schemas/SiteLaunchSpecDeployment" }
+        }
+      },
+
+      "$comment_SiteReveal": "Additive change to the EXISTING components.schemas.SiteReveal in openrpc/launch.openrpc.json: one new optional property on the reveal object itself (sibling of 'telemetry'), so a null telemetry field can say why.",
+
+      "SiteReveal_v2_telemetryUnavailableReason_EXAMPLE": {
+        "$comment": "Illustrative only — the single new property to add to components.schemas.SiteReveal.properties in openrpc/launch.openrpc.json.",
+        "type": ["string", "null"],
+        "enum": [null, "no-gateway", "gateway-unreachable", "gateway-not-live-yet"],
+        "description": "Set when 'telemetry' is null, to distinguish an intentionally headless site (deployment.gateway === 'disabled', value 'no-gateway') from a transient probe failure (the existing 'gateway-unreachable'/'gateway-not-live-yet' cases, which today are indistinguishable from a headless site because telemetry is just null either way)."
+      }
+    }
+  },
+
+  "errors": {
+    "$comment": "Additive to sites.overview's existing errors[] in openrpc/launch.openrpc.json.",
+    "ERR_NO_GATEWAY": {
+      "code": -32011,
+      "message": "This site was launched without a Gateway (spec.deployment.gateway = 'disabled'); there is no HTTP surface to read an overview from.",
+      "appliesTo": ["sites.overview"]
+    }
+  }
+}

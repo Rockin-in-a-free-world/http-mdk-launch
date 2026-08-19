@@ -1,0 +1,336 @@
+/* ---------------------------------------------------------------------
+ * Stoplight Mosaic theming — the ACTUAL override mechanism, not brute
+ * force. @metamask/open-rpc-docs-react ships its own scoped copy of
+ * Mosaic's utility CSS (class-prefixed `.stoplight …`), and that copy only
+ * paints color once something sets `data-theme="dark"` (or "light") on an
+ * ancestor — see console/src/main.jsx / App.jsx, which sets
+ * document.documentElement.dataset.theme. Once that's set, Mosaic's own
+ * `[data-theme="dark"] { --color-primary: …; --color-canvas: …; … }`
+ * block activates; the overrides below just repaint Mosaic's brand tokens
+ * (primary/canvas/text/font) to the launcher's own palette from
+ * src/app.css, on top of Mosaic's own dark values for everything else
+ * (success/danger/warning/shadows) so nothing is left undefined.
+ * ------------------------------------------------------------------- */
+
+:root,
+[data-theme='dark'] {
+  --font-ui: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  --color-primary: #f7931a;
+  --color-primary-dark: #d97b0f;
+  --color-primary-darker: #b8660c;
+  --color-primary-light: #f8a348;
+  --color-primary-tint: rgba(247, 147, 26, 0.16);
+  --color-text-primary: #f7931a;
+  --color-on-primary: #17130f;
+
+  --color-canvas: #0a0a09;
+  --color-canvas-pure: #0a0a09;
+  --color-canvas-dark: #000000;
+  --color-canvas-50: #17130f;
+  --color-canvas-100: #1a1815;
+  --color-canvas-200: #201d18;
+  --color-canvas-300: #26251f;
+  --color-canvas-400: #2c2a23;
+  --color-canvas-500: #33302a;
+  --color-canvas-dialog: #17130f;
+  --color-canvas-tint: rgba(23, 19, 15, 0.45);
+
+  --color-border: #26251f;
+  --color-border-dark: #26251f;
+  --color-border-light: #33302a;
+  --color-border-input: #26251f;
+  --color-border-button: #33302a;
+
+  --color-text: #f5f5f0;
+  --color-text-heading: #f5f5f0;
+  --color-text-paragraph: #f5f5f0;
+  --color-text-muted: #b7b7af;
+  --color-text-light: #6c6c66;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+  background: var(--mdk-color-surface, #0a0a09);
+}
+
+body {
+  font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+/* --------------------------- console chrome --------------------------- */
+
+.console-theme-toggle {
+  font: inherit;
+  font-size: 0.75rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--mdk-color-text-tertiary, #6c6c66);
+  background: transparent;
+  border: 1px solid var(--mdk-color-border, #26251f);
+  border-radius: 999px;
+  padding: 0.3rem 0.75rem;
+  cursor: pointer;
+}
+
+.console-theme-toggle:hover {
+  color: var(--mdk-color-primary, #f7931a);
+  border-color: var(--mdk-color-primary, #f7931a);
+}
+
+.console-intro {
+  margin-bottom: 1.25rem;
+}
+
+.console-shell {
+  display: grid;
+  grid-template-columns: 15rem 1fr;
+  gap: 1.5rem;
+  align-items: start;
+}
+
+@media (max-width: 900px) {
+  .console-shell {
+    grid-template-columns: 1fr;
+  }
+}
+
+.console-methods {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  position: sticky;
+  top: 0;
+}
+
+.console-methods__group-label {
+  margin: 0 0 0.4rem;
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--mdk-color-text-tertiary, #6c6c66);
+}
+
+.console-methods__group {
+  display: flex;
+  flex-direction: column;
+}
+
+.console-methods__item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  font: inherit;
+  font-size: 0.85rem;
+  padding: 0.45rem 0.6rem;
+  margin-bottom: 0.15rem;
+  color: var(--mdk-color-text-secondary, #b7b7af);
+  background: transparent;
+  border: none;
+  border-left: 2px solid transparent;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.console-methods__item:hover {
+  color: var(--mdk-color-text-primary, #f5f5f0);
+  background: color-mix(in srgb, var(--mdk-color-primary, #f7931a) 8%, transparent);
+}
+
+.console-methods__item[data-active='true'] {
+  color: var(--mdk-color-primary, #f7931a);
+  border-left-color: var(--mdk-color-primary, #f7931a);
+  background: color-mix(in srgb, var(--mdk-color-primary, #f7931a) 12%, transparent);
+  font-weight: 600;
+}
+
+.console-main {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  min-width: 0;
+}
+
+.console-doc {
+  max-width: none;
+  overflow-x: auto;
+}
+
+.console-tryit {
+  max-width: none;
+}
+
+.console-codeblock {
+  color: var(--mdk-color-primary, #f7931a);
+}
+
+/* -------------------- docs-react outer chrome, restyled -------------------- */
+/* These class names (method / method-name / badge / …) come out of
+ * @metamask/open-rpc-docs-react largely unstyled by design — it was built
+ * to sit inside a Docusaurus theme. We give them the launcher's own look
+ * instead of shipping their (absent) default. */
+
+.console-doc .method {
+  color: var(--mdk-color-text-secondary, #b7b7af);
+  font-size: 0.9rem;
+  line-height: 1.6;
+}
+
+.console-doc .method-name {
+  margin: 0 0 0.75rem;
+  font-size: 1.5rem;
+  font-weight: 800;
+  color: var(--mdk-color-text-primary, #f5f5f0);
+}
+
+.console-doc .method-description,
+.console-doc .method-summary {
+  color: var(--mdk-color-text-secondary, #b7b7af);
+  margin-bottom: 1rem;
+}
+
+.console-doc section {
+  margin-bottom: 1.5rem;
+}
+
+.console-doc h2 {
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--mdk-color-text-tertiary, #6c6c66);
+  margin: 0 0 0.75rem;
+}
+
+.console-doc h2 + span {
+  font-size: 0.75rem;
+  color: var(--mdk-color-text-tertiary, #6c6c66);
+}
+
+.console-doc h3 {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--mdk-color-text-primary, #f5f5f0);
+  margin: 1rem 0 0.4rem;
+}
+
+.console-doc .content-descriptor-summary {
+  color: var(--mdk-color-text-tertiary, #6c6c66);
+  font-style: normal;
+}
+
+.console-doc .content-descriptor-description {
+  color: var(--mdk-color-text-secondary, #b7b7af);
+  margin: 0.25rem 0 0.5rem;
+}
+
+.console-doc .badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.15rem 0.5rem;
+  margin-right: 0.4rem;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #17130f !important;
+  background: var(--mdk-color-primary, #f7931a) !important;
+}
+
+.console-doc table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+  margin-top: 0.5rem;
+}
+
+.console-doc th,
+.console-doc td {
+  text-align: left;
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid var(--mdk-color-border, #26251f);
+  color: var(--mdk-color-text-secondary, #b7b7af);
+}
+
+.console-doc th {
+  color: var(--mdk-color-text-tertiary, #6c6c66);
+  font-weight: 600;
+  text-transform: uppercase;
+  font-size: 0.7rem;
+  letter-spacing: 0.06em;
+}
+
+.console-doc select {
+  font: inherit;
+  color: var(--mdk-color-text-primary, #f5f5f0);
+  background: var(--mdk-color-surface, #0a0a09);
+  border: 1px solid var(--mdk-color-border, #26251f);
+  border-radius: 6px;
+  padding: 0.4rem 0.6rem;
+  margin-bottom: 0.75rem;
+}
+
+/* stoplight-scoped JSON Schema Viewer needs breathing room + our mono font */
+.console-doc .stoplight {
+  font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.85rem;
+}
+
+/* --------------------------- Inspector container --------------------------- */
+/* @open-rpc/inspector's layout (react-resizable-panels + Monaco) assumes a
+ * sized ancestor; the rules below are our own scoped copy of its
+ * dist/inspector.css (Resizer handles + scrollbars), confined to this
+ * container instead of being applied to the whole document body. */
+
+.console-inspector {
+  height: 70vh;
+  min-height: 640px;
+  max-height: 900px;
+  overflow: hidden;
+  border: 1px solid var(--mdk-color-border, #26251f);
+  border-radius: 8px;
+  position: relative;
+}
+
+.console-inspector .Resizer {
+  z-index: 1;
+  background: #000;
+  opacity: 0.2;
+  box-sizing: border-box;
+  background-clip: padding-box;
+}
+
+.console-inspector .Resizer:hover {
+  transition: all 0.2s ease;
+}
+
+.console-inspector .Resizer.horizontal {
+  height: 11px;
+  margin: -5px 0;
+  border-top: 5px solid transparent;
+  border-bottom: 5px solid transparent;
+  cursor: row-resize;
+  width: 100%;
+}
+
+.console-inspector .Resizer.vertical {
+  width: 11px;
+  margin: 0 -5px;
+  border-left: 5px solid transparent;
+  border-right: 5px solid transparent;
+  cursor: col-resize;
+}
+
+.console-inspector .Resizer.disabled {
+  cursor: not-allowed;
+}
+
+.console-inspector .Resizer.disabled:hover {
+  border-color: transparent;
+}

@@ -1,0 +1,20 @@
+{
+  "name": "http-mdk-launch",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Authenticated HTTP launcher for one MDK 0.6 site on Railway",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "start": "node src/server.js",
+    "test": "node --test test/*.test.js",
+    "build:console": "npm install --prefix console && npm run build --prefix console"
+  },
+  "dependencies": {
+    "@scure/bip39": "^2.3.0",
+    "@tetherto/wdk-wallet-solana": "^1.0.0-beta.4",
+    "ajv": "^8.17.1",
+    "ajv-formats": "^3.0.1"
+  }
+}

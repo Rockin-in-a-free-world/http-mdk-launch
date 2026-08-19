@@ -1,0 +1,29 @@
+{
+  "name": "mdk-launch-docs-console",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Interactive JSON-RPC docs console for http-mdk-launch's /v1/rpc surface. Scoped React+Vite build, isolated from the rest of this zero-build repo.",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@emotion/cache": "^11.14.0",
+    "@emotion/react": "^11.14.0",
+    "@emotion/styled": "^11.14.1",
+    "@metamask/open-rpc-docs-react": "file:./vendor/metamask-open-rpc-docs-react-0.2.0.tgz",
+    "@mui/icons-material": "6.3.1",
+    "@mui/material": "6.3.1",
+    "@open-rpc/inspector": "file:./vendor/open-rpc-inspector-2.0.3.tgz",
+    "@stoplight/mosaic": "1.32.0",
+    "monaco-editor": "0.52.2",
+    "react": "18.3.1",
+    "react-dom": "18.3.1"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.3.4",
+    "vite": "^6.0.5"
+  }
+}

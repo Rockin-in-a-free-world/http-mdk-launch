@@ -1,0 +1,574 @@
+{
+  "openrpc": "1.2.6",
+  "info": {
+    "title": "MDK site launcher (Railway)",
+    "version": "0.2.0",
+    "x-provenance": "mixed",
+    "description": "JSON-RPC 2.0 contract for http-mdk-launch, replacing the earlier OpenAPI 3/REST surface (see git history for openapi/launch.openapi.yaml) to match how the underlying MDK stack actually communicates. Single transport: POST /v1/rpc with a {jsonrpc:'2.0', method, params, id} body; responses are always HTTP 200 with either a result or a JSON-RPC error object in the body, per JSON-RPC-over-HTTP convention. Session auth is a cookie (see session.create/auth.createWallet), unaffected by this transport change. GET /health, GET /ready, GET /v1/sites/{id}/spec.yaml, and the page/asset routes are deliberately NOT part of this RPC surface: Railway's healthcheck needs a plain GET, and a YAML file download needs a real downloadable URL, not a POST envelope. Provenance honesty, method by method: auth.createWallet/session.create/session.logout/session.me are this launcher's own BIP-39/WDK-derived seed-phrase sign-in scheme (src/wdk.js, src/session.js) with no MDK-core counterpart -- WDK is a separate Tether product (the Wallet Development Kit), not MDK; sites.validate/sites.get/sites.stop/sites.notes.set are launcher-owned bookkeeping and validation with no MDK-core call of their own; sites.create/sites.overview/sites.reveal are mixed -- the RPC envelope, slot bookkeeping, and error-shaping are launcher-owned, while what they actually boot or probe (Kernel/Gateway/Worker boot via templates/minimal-site/start.js's getKernel()/kernel.registerWorker()/waitForDiscovery()/startGateway(), and the real Gateway GET /overview route) is genuine MDK 0.6 core. Every method and every components.schemas entry below carries its own x-provenance plus a [BYOT]/[MDK CORE]/[MIXED]-prefixed description spelling out the precise split.",
+    "contact": {
+      "name": "launcher maintainers",
+      "url": "https://github.com/Rockin-in-a-free-world/http-mdk-launch"
+    },
+    "license": {
+      "name": "Apache-2.0",
+      "url": "https://github.com/Rockin-in-a-free-world/http-mdk-launch/blob/0.6-railway/LICENSE"
+    }
+  },
+  "servers": [
+    { "name": "local or Railway", "url": "/v1/rpc" }
+  ],
+  "methods": [
+    {
+      "name": "session.me",
+      "summary": "Current session, if any",
+      "description": "[BYOT] Reports this launcher's own HMAC-signed session-cookie state (src/session.js's sessionFromRequest). MDK core has no session or identity-reporting capability of its own to wrap here.",
+      "tags": [{ "name": "session" }],
+      "x-provenance": "byot",
+      "params": [],
+      "result": { "name": "SessionInfo", "schema": { "$ref": "#/components/schemas/SessionInfo" } },
+      "examples": [
+        {
+          "name": "not-signed-in",
+          "params": [],
+          "result": { "name": "not-signed-in-result", "value": { "authenticated": false } }
+        }
+      ]
+    },
+    {
+      "name": "auth.createWallet",
+      "summary": "Create a new BIP-39 seed and sign in with it",
+      "description": "[BYOT] This launcher's own seed-phrase sign-in scheme: src/wdk.js generates a BIP-39 mnemonic (@scure/bip39) and derives a public key via @tetherto/wdk-wallet-solana -- WDK, the Wallet Development Kit, a different Tether product from MDK itself. MDK core has no wallet, session, or identity capability of its own being wrapped here (see maintainers/README.md's Stage 2 rewrite: a deliberate simplification of an even-more-BYOT original design). The seed phrase is returned exactly once in the result and never stored server-side beyond deriving the public key. Sets the session cookie.",
+      "tags": [{ "name": "session" }],
+      "x-provenance": "byot",
+      "params": [],
+      "result": { "name": "SessionCreated", "schema": { "$ref": "#/components/schemas/SessionCreated" } },
+      "errors": [
+        { "code": -32003, "message": "This public key is not allowlisted" }
+      ],
+      "examples": [
+        {
+          "name": "new-wallet",
+          "params": [],
+          "result": {
+            "name": "new-wallet-result",
+            "value": {
+              "publicKey": "7xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAsU",
+              "token": "eyJhbGciOiJIUzI1NiJ9.example-session-token.signature",
+              "created": true,
+              "seedPhrase": "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "session.create",
+      "summary": "Sign in with an existing BIP-39 seed phrase",
+      "description": "[BYOT] Accepts a pasted BIP-39 seed phrase and derives its public key via src/wdk.js's publicKeyFromSeed (WDK's WalletManagerSolana, not an MDK capability), then sets this launcher's own session cookie (src/session.js's signSession). No MDK capability corresponds to this.",
+      "tags": [{ "name": "session" }],
+      "x-provenance": "byot",
+      "params": [
+        { "name": "seedPhrase", "required": true, "schema": { "type": "string" } }
+      ],
+      "result": { "name": "SessionCreated", "schema": { "$ref": "#/components/schemas/SessionCreated" } },
+      "errors": [
+        { "code": -32602, "message": "That seed phrase is not valid" },
+        { "code": -32003, "message": "This public key is not allowlisted" }
+      ],
+      "examples": [
+        {
+          "name": "known-test-vector",
+          "params": [
+            {
+              "name": "seedPhrase",
+              "value": "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about"
+            }
+          ],
+          "result": {
+            "name": "known-test-vector-result",
+            "value": {
+              "publicKey": "7xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAsU",
+              "token": "eyJhbGciOiJIUzI1NiJ9.example-session-token.signature",
+              "created": false
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "session.logout",
+      "summary": "Clear the session cookie",
+      "description": "[BYOT] Clears this launcher's own HMAC-signed session cookie (src/session.js's clearCookieHeader). No MDK-core equivalent exists.",
+      "tags": [{ "name": "session" }],
+      "x-provenance": "byot",
+      "params": [],
+      "result": { "name": "Ok", "schema": { "type": "object", "properties": { "ok": { "type": "boolean", "enum": [true] } } } },
+      "examples": [
+        {
+          "name": "logout",
+          "params": [],
+          "result": { "name": "logout-result", "value": { "ok": true } }
+        }
+      ]
+    },
+    {
+      "name": "sites.validate",
+      "summary": "Validate a SiteLaunch document without launching it",
+      "description": "[BYOT] Runs this launcher's own AJV JSON-Schema validation (src/validate-site.js against src/schema/site-launch.json) over the SiteLaunch envelope. Performs no MDK call at all.",
+      "tags": [{ "name": "sites" }],
+      "x-provenance": "byot",
+      "params": [
+        { "name": "spec", "required": true, "schema": { "$ref": "#/components/schemas/SiteLaunch" } }
+      ],
+      "result": {
+        "name": "ValidateResult",
+        "schema": {
+          "type": "object",
+          "required": ["valid", "spec"],
+          "properties": {
+            "valid": { "type": "boolean" },
+            "spec": { "$ref": "#/components/schemas/SiteLaunch" }
+          }
+        }
+      },
+      "errors": [ { "code": -32602, "message": "Invalid or unsupported spec" } ],
+      "examples": [
+        {
+          "name": "hobby-demo",
+          "params": [
+            {
+              "name": "spec",
+              "value": {
+                "apiVersion": "launch.mdk.tether.io/v1alpha1",
+                "kind": "SiteLaunch",
+                "metadata": { "name": "hobby-demo" },
+                "spec": { "template": { "name": "minimal-site", "version": "0.6.0" }, "persistence": "ephemeral" }
+              }
+            }
+          ],
+          "result": { "name": "hobby-demo-result", "value": { "valid": true } }
+        }
+      ]
+    },
+    {
+      "name": "sites.create",
+      "summary": "Launch the minimal-site template into Site 1, 2, or 3",
+      "description": "[MIXED] The RPC envelope, slot bookkeeping (recordForSlot()/nextSlot() in src/server.js), and idempotency-shaped SiteRecord are this launcher's own invention; what it actually boots is real MDK 0.6 core -- templates/minimal-site/start.js's getKernel(), kernel.registerWorker(), waitForDiscovery(), and startGateway(). Session-gated. Boots Kernel, a demo Worker, and Gateway on loopback. Set metadata.slot (1/2/3) to target a tab explicitly, so Site 1 and Site 2 can run independently customized specs instead of relying on first-empty-slot assignment.",
+      "tags": [{ "name": "sites" }],
+      "x-provenance": "mixed",
+      "params": [
+        { "name": "spec", "required": true, "schema": { "$ref": "#/components/schemas/SiteLaunch" } }
+      ],
+      "result": { "name": "SiteRecord", "schema": { "$ref": "#/components/schemas/SiteRecord" } },
+      "errors": [
+        { "code": -32602, "message": "Invalid or unsupported spec" },
+        { "code": -32001, "message": "Sign in with a BIP-39 seed to continue" },
+        { "code": -32009, "message": "Requested site slot is already booting or live" },
+        { "code": -32010, "message": "Local MDK v0.6.0 runtime tree is missing" }
+      ],
+      "examples": [
+        {
+          "name": "hobby-demo",
+          "params": [
+            {
+              "name": "spec",
+              "value": {
+                "apiVersion": "launch.mdk.tether.io/v1alpha1",
+                "kind": "SiteLaunch",
+                "metadata": { "name": "hobby-demo" },
+                "spec": { "template": { "name": "minimal-site", "version": "0.6.0" }, "persistence": "ephemeral" }
+              }
+            }
+          ],
+          "result": {
+            "name": "hobby-demo-result",
+            "value": {
+              "siteId": "site-hobby-demo-9f3a21bc",
+              "slot": 1,
+              "state": "accepted",
+              "spec": {
+                "apiVersion": "launch.mdk.tether.io/v1alpha1",
+                "kind": "SiteLaunch",
+                "metadata": { "name": "hobby-demo" },
+                "spec": { "template": { "name": "minimal-site", "version": "0.6.0" }, "persistence": "ephemeral" }
+              },
+              "createdAt": "2026-08-18T09:00:00.000Z",
+              "updatedAt": "2026-08-18T09:00:00.000Z"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "sites.get",
+      "summary": "Fetch one site's lifecycle record",
+      "description": "[BYOT] Returns this launcher's own in-memory lifecycle bookkeeping (the sites Map in src/server.js) for one siteId; no MDK-core call of its own beyond what sites.create already performed at boot.",
+      "tags": [{ "name": "sites" }],
+      "x-provenance": "byot",
+      "params": [ { "name": "siteId", "required": true, "schema": { "type": "string" } } ],
+      "result": { "name": "SiteRecord", "schema": { "$ref": "#/components/schemas/SiteRecord" } },
+      "errors": [
+        { "code": -32001, "message": "Sign in with a BIP-39 seed to continue" },
+        { "code": -32004, "message": "No site with that id" }
+      ],
+      "examples": [
+        {
+          "name": "live-site",
+          "params": [ { "name": "siteId", "value": "site-hobby-demo-9f3a21bc" } ],
+          "result": {
+            "name": "live-site-result",
+            "value": {
+              "siteId": "site-hobby-demo-9f3a21bc",
+              "slot": 1,
+              "state": "live",
+              "spec": {
+                "apiVersion": "launch.mdk.tether.io/v1alpha1",
+                "kind": "SiteLaunch",
+                "metadata": { "name": "hobby-demo" },
+                "spec": { "template": { "name": "minimal-site", "version": "0.6.0" }, "persistence": "ephemeral" }
+              },
+              "createdAt": "2026-08-18T09:00:00.000Z",
+              "updatedAt": "2026-08-18T09:00:12.000Z"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "sites.stop",
+      "summary": "Shut down a site",
+      "description": "[BYOT] Launcher-owned lifecycle bookkeeping: stopSite()/stopChild() (src/server.js, src/supervisor.js) send SIGTERM (then SIGKILL if needed) to the supervised child process. No MDK-core call of its own beyond process signal handling.",
+      "tags": [{ "name": "sites" }],
+      "x-provenance": "byot",
+      "params": [ { "name": "siteId", "required": true, "schema": { "type": "string" } } ],
+      "result": { "name": "SiteRecord", "schema": { "$ref": "#/components/schemas/SiteRecord" } },
+      "errors": [
+        { "code": -32001, "message": "Sign in with a BIP-39 seed to continue" },
+        { "code": -32004, "message": "No site with that id" }
+      ],
+      "examples": [
+        {
+          "name": "stop-site",
+          "params": [ { "name": "siteId", "value": "site-hobby-demo-9f3a21bc" } ],
+          "result": {
+            "name": "stop-site-result",
+            "value": {
+              "siteId": "site-hobby-demo-9f3a21bc",
+              "slot": 1,
+              "state": "stopped",
+              "spec": {
+                "apiVersion": "launch.mdk.tether.io/v1alpha1",
+                "kind": "SiteLaunch",
+                "metadata": { "name": "hobby-demo" },
+                "spec": { "template": { "name": "minimal-site", "version": "0.6.0" }, "persistence": "ephemeral" }
+              },
+              "createdAt": "2026-08-18T09:00:00.000Z",
+              "updatedAt": "2026-08-18T09:05:00.000Z"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "sites.overview",
+      "summary": "Live device overview from a site's Gateway",
+      "description": "[MIXED] Probes a real Gateway route, GET /overview -- MDK core's plugin-served HTTP surface (templates/minimal-site/plugins/dashboard/controllers/overview.js, backed by services.mdkClient.listWorkers()/pullTelemetry()); the RPC method wrapping, session gating, and error-shaping around that probe (src/server.js, src/supervisor.js's probeOverview()) are this launcher's own.",
+      "tags": [{ "name": "sites" }],
+      "x-provenance": "mixed",
+      "params": [ { "name": "siteId", "required": true, "schema": { "type": "string" } } ],
+      "result": { "name": "Overview", "schema": { "type": "object" } },
+      "errors": [
+        { "code": -32001, "message": "Sign in with a BIP-39 seed to continue" },
+        { "code": -32004, "message": "No site with that id" },
+        { "code": -32009, "message": "Site Gateway is not live yet" },
+        { "code": -32010, "message": "MDK Gateway is not reachable" }
+      ],
+      "examples": [
+        {
+          "name": "device-overview",
+          "params": [ { "name": "siteId", "value": "site-hobby-demo-9f3a21bc" } ],
+          "result": {
+            "name": "device-overview-result",
+            "value": { "devices": [ { "workerState": "READY", "hashrate_rt": 12.4, "power": 3200 } ] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "sites.reveal",
+      "summary": "JSON reveal: launch curl, key fingerprints, storage-at-rest, live telemetry",
+      "description": "[MIXED] A composite result whose fields split independently -- see SiteReveal's own x-provenance and description for the field-by-field breakdown (requestCurl is byot; keys are real MDK-core key material in a byot fingerprint format; storage.corestore is a real MDK/Hypercore Corestore path inside an otherwise byot storage object; telemetry reuses sites.overview's real Gateway probe; telemetryStorage, when present, is entirely byot).",
+      "tags": [{ "name": "sites" }],
+      "x-provenance": "mixed",
+      "params": [ { "name": "siteId", "required": true, "schema": { "type": "string" } } ],
+      "result": { "name": "SiteReveal", "schema": { "$ref": "#/components/schemas/SiteReveal" } },
+      "errors": [
+        { "code": -32001, "message": "Sign in with a BIP-39 seed to continue" },
+        { "code": -32004, "message": "No site with that id" }
+      ],
+      "examples": [
+        {
+          "name": "reveal-site",
+          "params": [ { "name": "siteId", "value": "site-hobby-demo-9f3a21bc" } ],
+          "result": {
+            "name": "reveal-site-result",
+            "value": {
+              "siteId": "site-hobby-demo-9f3a21bc",
+              "slot": 1,
+              "state": "live",
+              "requestCurl": "curl -sS -X POST \"$HOST/v1/rpc\" -H \"content-type: application/json\" -d '{\"jsonrpc\":\"2.0\",\"method\":\"sites.create\",...}'",
+              "keys": null,
+              "storage": {
+                "persistence": "ephemeral",
+                "mode": "ephemeral",
+                "path": ".data/sites/site-hobby-demo-9f3a21bc/.mdk-data",
+                "corestore": ".data/sites/site-hobby-demo-9f3a21bc/.mdk-data/store/http/CORESTORE",
+                "atRest": "Corestore-backed Hyperbee state on local disk under .data/sites/<siteId>; deleted the moment this site is stopped or the launcher restarts."
+              },
+              "telemetry": null
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "sites.notes.set",
+      "summary": "Save free-text notes for a site (persisted into its downloadable spec.yaml)",
+      "description": "[BYOT] Pure launcher feature: free-text notes stored on the in-memory site record (src/server.js) and rendered into the downloadable spec.yaml (src/spec-yaml.js). No MDK equivalent.",
+      "tags": [{ "name": "sites" }],
+      "x-provenance": "byot",
+      "params": [
+        { "name": "siteId", "required": true, "schema": { "type": "string" } },
+        { "name": "notes", "required": true, "schema": { "type": "string", "maxLength": 4000 } }
+      ],
+      "result": { "name": "SiteNotes", "schema": { "$ref": "#/components/schemas/SiteNotes" } },
+      "errors": [
+        { "code": -32001, "message": "Sign in with a BIP-39 seed to continue" },
+        { "code": -32004, "message": "No site with that id" },
+        { "code": -32602, "message": "Notes must be a string of 4000 characters or fewer" }
+      ],
+      "examples": [
+        {
+          "name": "save-notes",
+          "params": [
+            { "name": "siteId", "value": "site-hobby-demo-9f3a21bc" },
+            { "name": "notes", "value": "Demo site for the Railway Hobby plan walkthrough." }
+          ],
+          "result": {
+            "name": "save-notes-result",
+            "value": {
+              "siteId": "site-hobby-demo-9f3a21bc",
+              "notes": "Demo site for the Railway Hobby plan walkthrough.",
+              "updatedAt": "2026-08-18T09:06:00.000Z"
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "components": {
+    "schemas": {
+      "SessionInfo": {
+        "type": "object",
+        "x-provenance": "byot",
+        "description": "[BYOT] Reports this launcher's own session-cookie state (src/session.js's sessionFromRequest); MDK core has no session or identity-reporting capability of its own.",
+        "additionalProperties": false,
+        "required": ["authenticated"],
+        "properties": {
+          "authenticated": { "type": "boolean" },
+          "publicKey": { "type": "string" }
+        }
+      },
+      "SessionCreated": {
+        "type": "object",
+        "x-provenance": "byot",
+        "description": "[BYOT] This launcher's own sign-in response shape, wrapping a BIP-39/WDK-derived public key (src/wdk.js) and this launcher's HMAC-signed session token (src/session.js's signSession); not an MDK-defined contract.",
+        "additionalProperties": false,
+        "required": ["publicKey", "token", "created"],
+        "properties": {
+          "publicKey": { "type": "string" },
+          "token": { "type": "string" },
+          "created": { "type": "boolean" },
+          "seedPhrase": { "type": "string", "description": "Present only when created=true. Shown once." }
+        }
+      },
+      "SiteLaunch": {
+        "type": "object",
+        "x-provenance": "mixed",
+        "description": "[MIXED] The envelope -- apiVersion/kind/metadata -- is a launcher-owned namespace (launch.mdk.tether.io/v1alpha1; see maintainers/README.md Stage 3: 'a launcher-owned namespace,' not a native MDK config file, since public 0.6 has no mdk.yaml stack document for this topology). spec.template selects a real MDK-core template (Kernel/Gateway/Worker boot per templates/minimal-site/start.js) and spec.persistence controls whether that boot's Kernel root lands on a Railway volume.",
+        "additionalProperties": false,
+        "required": ["apiVersion", "kind", "metadata", "spec"],
+        "properties": {
+          "apiVersion": { "type": "string", "enum": ["launch.mdk.tether.io/v1alpha1"] },
+          "kind": { "type": "string", "enum": ["SiteLaunch"] },
+          "metadata": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["name"],
+            "properties": {
+              "name": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 63,
+                "pattern": "^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$"
+              },
+              "slot": {
+                "type": "integer",
+                "enum": [1, 2, 3],
+                "description": "Target Site 1, 2, or 3 explicitly instead of first-empty-slot assignment."
+              }
+            }
+          },
+          "spec": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["template", "persistence"],
+            "properties": {
+              "template": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["name", "version"],
+                "properties": {
+                  "name": { "type": "string", "enum": ["minimal-site"] },
+                  "version": { "type": "string", "enum": ["0.6.0"] }
+                }
+              },
+              "persistence": { "type": "string", "enum": ["required", "ephemeral"] },
+              "auth": { "$ref": "#/components/schemas/SiteLaunchSpecAuth" },
+              "plugins": { "$ref": "#/components/schemas/SiteLaunchSpecPlugins" }
+            }
+          }
+        }
+      },
+      "SiteLaunchSpecAuth": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["username", "password"],
+        "properties": {
+          "username": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 63,
+            "description": "HTTP Basic Auth username for this site's protected Gateway routes."
+          },
+          "password": {
+            "type": "string",
+            "minLength": 8,
+            "description": "Plaintext password, submitted once. The launcher hashes it immediately on receipt (scrypt, random per-site salt) and discards the plaintext: never stored in the SiteRecord, never included in sites.reveal or the downloadable spec.yaml, and never passed to the child process -- only the salt+hash are, via env vars."
+          }
+        },
+        "x-provenance": "byot",
+        "description": "[BYOT] The basic-auth plugin and this schema are this launcher's own invention, not an MDK-provided plugin (see templates/minimal-site/plugins/basic-auth/lib/guard.js's requireBasicAuth and design/plugin-basic-auth.md). Confirmed further by src/supervisor.js's INTERNAL_PROBE_SECRET: this launcher had to invent its own internal-probe header specifically because MDK core has no concept of \"this HTTP call is the platform's own health check, not a user request.\" Optional. Omitting this object entirely means the site has no basic-auth protection (default, unchanged). Its presence is itself the opt-in."
+      },
+      "PluginName": {
+        "type": "string",
+        "enum": ["telemetry-store"],
+        "x-provenance": "byot",
+        "description": "[BYOT] telemetry-store is this launcher's own plugin invention (templates/minimal-site/plugins/telemetry-store), with no MDK-provided telemetry-persistence mechanism behind it. Closed set of config-free plugins a site can opt into via spec.plugins. basic-auth is not in this enum because it always needs config and is opted into via spec.auth's presence instead."
+      },
+      "SiteLaunchSpecPlugins": {
+        "type": "array",
+        "items": { "$ref": "#/components/schemas/PluginName" },
+        "uniqueItems": true,
+        "x-provenance": "byot",
+        "description": "[BYOT] This array and every plugin it can name are this launcher's own opt-in mechanism; MDK core provides the underlying Gateway plugin-loading mechanism (extraPluginDirs) but not this specific plugin roster. Optional. Omit (or []) for default behavior: no extra plugins. Listing 'telemetry-store' boots the site with the telemetry-store plugin registered, appending every polled telemetry read to an on-disk CSV under the site's .mdk-data root."
+      },
+      "SiteRecord": {
+        "type": "object",
+        "x-provenance": "mixed",
+        "description": "[MIXED] The lifecycle envelope -- siteId, slot, state machine, createdAt/updatedAt -- is launcher-owned bookkeeping (the sites Map in src/server.js). spec embeds the mixed SiteLaunch schema, and identity (present once state is live) is a real MDK-core Kernel/Worker public-key fingerprint pair written by templates/minimal-site/start.js, only reformatted for display by this launcher.",
+        "additionalProperties": false,
+        "required": ["siteId", "slot", "state", "spec", "createdAt", "updatedAt"],
+        "properties": {
+          "siteId": { "type": "string" },
+          "slot": { "type": "integer", "enum": [1, 2, 3] },
+          "state": { "type": "string", "enum": ["accepted", "booting", "live", "failed", "stopping", "stopped"] },
+          "spec": { "$ref": "#/components/schemas/SiteLaunch" },
+          "identity": { "type": ["object", "null"] },
+          "failure": { "type": ["object", "null"] },
+          "createdAt": { "type": "string", "format": "date-time" },
+          "updatedAt": { "type": "string", "format": "date-time" }
+        }
+      },
+      "SiteReveal": {
+        "type": "object",
+        "x-provenance": "mixed",
+        "description": "[MIXED] Field-by-field split: requestCurl is entirely byot (src/server.js's revealCurl(), a reproduction curl string this launcher invents). keys are derived from real MDK-core-generated Kernel/Worker keypairs (templates/minimal-site/start.js's fingerprint()), even though the fingerprint/short display format is byot. storage.corestore points at a real MDK/Hypercore Corestore path (mdk-core primitive, src/server.js's revealStorage()), even though the rest of the storage object's shape (mode/atRest strings) is byot. telemetry reuses sites.overview's real Gateway GET /overview probe (mixed). telemetryStorage, when present, is entirely byot -- the telemetry-store plugin, with no MDK-provided equivalent.",
+        "additionalProperties": false,
+        "required": ["siteId", "slot", "state", "requestCurl", "storage", "telemetry"],
+        "properties": {
+          "siteId": { "type": "string" },
+          "slot": { "type": "integer", "enum": [1, 2, 3] },
+          "state": { "type": "string", "enum": ["accepted", "booting", "live", "failed", "stopping", "stopped"] },
+          "requestCurl": { "type": "string" },
+          "keys": { "type": ["object", "null"] },
+          "storage": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["persistence", "mode", "path", "corestore", "atRest"],
+            "properties": {
+              "persistence": { "type": "string", "enum": ["required", "ephemeral"] },
+              "mode": { "type": "string", "enum": ["volume", "ephemeral"] },
+              "path": { "type": "string" },
+              "corestore": { "type": "string" },
+              "atRest": { "type": "string" }
+            }
+          },
+          "telemetry": { "type": ["object", "null"] },
+          "telemetryStorage": { "$ref": "#/components/schemas/SiteRevealTelemetryStorage" }
+        }
+      },
+      "TelemetryStorageMechanism": {
+        "type": "string",
+        "enum": ["csv"],
+        "x-provenance": "byot",
+        "description": "[BYOT] Describes this launcher's own telemetry-store plugin's persistence mechanism (templates/minimal-site/plugins/telemetry-store/lib/store.js); MDK core provides no telemetry-persistence mechanism of its own. Which on-disk mechanism telemetry-store used. Only 'csv' today, kept as an enum (not a boolean) so a future 'sqlite' implementation is additive."
+      },
+      "TelemetryStorageGrowth": {
+        "type": "object",
+        "x-provenance": "byot",
+        "description": "[BYOT] Derived entirely from this launcher's own telemetry-store plugin's CSV file stats (templates/minimal-site/plugins/telemetry-store/controllers/stats.js); no MDK-core equivalent.",
+        "additionalProperties": false,
+        "required": ["bytesPerHour", "bytesPerSample"],
+        "properties": {
+          "bytesPerHour": {
+            "type": ["number", "null"],
+            "description": "sizeBytes / hours elapsed between the first and most recent recorded sample. null until at least two distinct sample timestamps have been observed."
+          },
+          "bytesPerSample": {
+            "type": ["number", "null"],
+            "description": "sizeBytes / rowCount. null until at least one row has been appended."
+          }
+        }
+      },
+      "SiteRevealTelemetryStorage": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["mechanism", "path", "sizeBytes", "rowCount", "firstObservedAt", "lastObservedAt", "growth"],
+        "properties": {
+          "mechanism": { "$ref": "#/components/schemas/TelemetryStorageMechanism" },
+          "path": { "type": "string", "description": "Absolute path to the CSV file on this site's .mdk-data root." },
+          "sizeBytes": { "type": "integer", "minimum": 0 },
+          "rowCount": { "type": "integer", "minimum": 0 },
+          "firstObservedAt": { "type": ["integer", "null"] },
+          "lastObservedAt": { "type": ["integer", "null"] },
+          "growth": { "$ref": "#/components/schemas/TelemetryStorageGrowth" }
+        },
+        "x-provenance": "byot",
+        "description": "[BYOT] Reports on this launcher's own telemetry-store plugin (templates/minimal-site/plugins/telemetry-store), sourced via src/supervisor.js's probeTelemetryStoreStats() hitting that plugin's GET /telemetry-store/stats route; MDK core has no telemetry-persistence mechanism of its own to report on. Optional sibling of SiteReveal.storage/telemetry. Present only when this site's spec.plugins included 'telemetry-store'; otherwise omitted entirely (not null) -- a site that never opted in has nothing to report here."
+      },
+      "SiteNotes": {
+        "type": "object",
+        "x-provenance": "byot",
+        "description": "[BYOT] Pure launcher feature: free-text notes stored on the in-memory site record and rendered into the downloadable spec.yaml (src/server.js, src/spec-yaml.js); no MDK equivalent.",
+        "additionalProperties": false,
+        "required": ["siteId", "notes", "updatedAt"],
+        "properties": {
+          "siteId": { "type": "string" },
+          "notes": { "type": "string", "maxLength": 4000 },
+          "updatedAt": { "type": "string", "format": "date-time" }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,88 @@
+{
+  "$id": "https://launch.mdk.tether.io/v1alpha1/SiteLaunch.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["apiVersion", "kind", "metadata", "spec"],
+  "properties": {
+    "apiVersion": {
+      "type": "string",
+      "const": "launch.mdk.tether.io/v1alpha1"
+    },
+    "kind": {
+      "type": "string",
+      "const": "SiteLaunch"
+    },
+    "metadata": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 63,
+          "pattern": "^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$"
+        },
+        "slot": {
+          "type": "integer",
+          "enum": [1, 2, 3],
+          "description": "Optional explicit site tab to launch into (1=Site 1, 2=Site 2, 3=Site 3). Lets a caller target Site 1 and Site 2 independently with different specs instead of relying on first-empty-slot assignment. Omit to auto-assign the next empty slot."
+        }
+      }
+    },
+    "spec": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["template", "persistence"],
+      "properties": {
+        "template": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["name", "version"],
+          "properties": {
+            "name": {
+              "type": "string",
+              "const": "minimal-site"
+            },
+            "version": {
+              "type": "string",
+              "const": "0.6.0"
+            }
+          }
+        },
+        "persistence": {
+          "type": "string",
+          "enum": ["required", "ephemeral"]
+        },
+        "auth": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["username", "password"],
+          "properties": {
+            "username": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 63,
+              "description": "HTTP Basic Auth username for this site's protected Gateway routes."
+            },
+            "password": {
+              "type": "string",
+              "minLength": 8,
+              "description": "Plaintext password, submitted once. The launcher hashes it immediately on receipt (scrypt, random per-site salt) and never stores, reveals, or logs the plaintext."
+            }
+          },
+          "description": "Optional. Omitting this object entirely means the site has no basic-auth protection (unchanged default behavior). Its presence is itself the opt-in."
+        },
+        "plugins": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": ["telemetry-store"]
+          },
+          "uniqueItems": true,
+          "description": "Optional. Omit (or []) for today's behavior: no extra plugins. Listing 'telemetry-store' boots the site with the telemetry-store plugin registered."
+        }
+      }
+    }
+  }
+}
